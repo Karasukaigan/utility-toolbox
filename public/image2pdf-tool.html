@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" type="text/css" href="css/reset.min.css">
+    <title>Image to PDF Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 auto 0 auto;
+        }
+
+        .toolbox-link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        label {
+            font-size: 16px;
+            margin-right: 5px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        input[type="text"] {
+            width: 150px;
+            padding: 5px;
+            margin-right: 10px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+
+        .custom-file-upload {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .image-container img {
+            max-height: 300px;
+            margin: 5px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .image-container img:hover {
+            transform: scale(2);
+        }
+
+        .img-box {
+            width: 90%;
+            min-width: 1000px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin: 20px auto;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            background-color: #fff;
+            color: gray;
+            font-weight: bolder;
+            font-size: 18px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Image to PDF Converter</h1>
+        <a href="/" class="toolbox-link">
+            < Back to Toolbox</a>
+    </div>
+    <label for="pdfFile">PDF File Name:</label>
+    <input type="text" id="pdfFileName" placeholder="Enter PDF file name" value="output">
+    <button onclick="openFileSelector()">Select JPG Images to Merge into PDF</button>
+    <div class="img-box">
+        <div id="statusLabel">Selected Images</div>
+        <div class="image-container" id="imageContainer"></div>
+    </div>
+    <div class="pdf-container" id="pdfContainer"></div>
+
+    <script>
+        function openFileSelector() {
+            fetch('/clear-pdf-cache')
+                .then(function (response) {
+                    return response.text();
+                })
+                .then(function (message) {
+                    console.log(message);
+                    var input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/jpeg';
+                    input.multiple = true;
+                    input.addEventListener('change', function (event) {
+                        var files = event.target.files;
+                        var imageContainer = document.getElementById('imageContainer');
+                        imageContainer.innerHTML = '';
+                        for (var i = 0; i < files.length; i++) {
+                            var file = files[i];
+                            var img = document.createElement('img');
+                            img.src = URL.createObjectURL(file);
+                            img.classList.add('uploaded-image');
+                            imageContainer.appendChild(img);
+                        }
+                        uploadImages(files);
+                    });
+                    input.click();
+                })
+                .catch(function (error) {
+                    console.error('Clear image cache error:', error);
+                });
+        }
+
+        function uploadImages(files) {
+            var formData = new FormData();
+            for (var i = 0; i < files.length; i++) {
+                var file = files[i];
+                var encodedFileName = encodeURIComponent(file.name);
+                formData.append('images', file, encodedFileName);
+            }
+            var pdfFileName = document.getElementById('pdfFileName').value;
+            formData.append('pdfFileName', pdfFileName);
+
+            var statusLabel = document.getElementById('statusLabel');
+            statusLabel.textContent = 'Merging Images into PDF';
+            var dots = 1;
+            var timer = setInterval(function () {
+                statusLabel.textContent = 'Merging Images into PDF' + '.'.repeat(dots);
+                dots = (dots + 1) % 4;
+            }, 500);
+
+            var randomParam = Date.now();
+            var url = '/images-to-pdf?' + randomParam;
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (result) {
+                    console.log(result);
+                    displayPdf(result.pdfPath);
+                    clearInterval(timer);
+                    statusLabel.textContent = 'Selected Images';
+                })
+                .catch(function (error) {
+                    clearInterval(timer);
+                    statusLabel.textContent = 'Selected Images';
+                    console.error('Image upload error:', error);
+                });
+        }
+
+        async function displayPdf(pdfPath) {
+            var pdfContainer = document.getElementById('pdfContainer');
+            pdfContainer.innerHTML = '';
+
+            try {
+                if (pdfPath) {
+                    var pdfUrl = pdfPath.replace('public/', '');
+                    var embed = document.createElement('embed');
+                    embed.src = addRandomParam(pdfUrl);
+                    embed.type = 'application/pdf';
+                    embed.width = '100%';
+                    embed.height = '600px';
+                    pdfContainer.appendChild(embed);
+                } else {
+                    var errorMessage = document.createElement('p');
+                    errorMessage.style.color = 'red';
+                    errorMessage.style.margin = '20px auto';
+                    errorMessage.textContent = 'Failed to merge images into PDF. Please try again or contact the developer.';
+                    pdfContainer.appendChild(errorMessage);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                var errorMessage = document.createElement('p');
+                errorMessage.style.color = 'red';
+                errorMessage.style.margin = '20px auto';
+                errorMessage.textContent = 'Failed to merge images into PDF. Please try again or contact the developer.';
+                pdfContainer.appendChild(errorMessage);
+            }
+        }
+
+        function addRandomParam(url) {
+            var randomParam = Date.now();
+            return url + '?' + randomParam;
+        }
+    </script>
+</body>
+
+</html>

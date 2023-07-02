@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="css/reset.min.css">
+    <title>Image Format Conversion Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 auto 0 auto;
+        }
+
+        .toolbox-link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        label {
+            font-size: 16px;
+            margin-right: 5px;
+        }
+
+        input[type="number"],
+        select
+         {
+            width: 80px;
+            padding: 5px;
+            margin-right: 10px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .image-container img {
+            max-height: 300px;
+            margin: 5px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .image-container img:hover {
+            transform: scale(2);
+        }
+
+        .img-box {
+            width: 90%;
+            min-width: 1000px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin: 20px auto;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            background-color: #fff;
+            color: gray;
+            font-weight: bolder;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Image Format Conversion Tool</h1>
+        <a href="/" class="toolbox-link">
+            < Back to Toolbox</a>
+    </div>
+    <label for="sourceFormat">Source Image Format:</label>
+    <select id="sourceFormat" onchange="updateTargetFormatOptions()">
+        <option value="png" selected>PNG</option>
+        <option value="jpg">JPG</option>
+        <option value="webp">WebP</option>
+    </select>
+    <label for="targetFormat">Target Image Format:</label>
+    <select id="targetFormat">
+        <option value="png" disabled>PNG</option>
+        <option value="jpg" selected>JPG</option>
+        <option value="webp">WebP</option>
+    </select>
+    <button onclick="openFileSelector()">Select Image</button>
+    <div class="img-box">
+        <div>Source Image</div>
+        <div class="image-container" id="imageContainer"></div>
+    </div>
+    <div class="img-box">
+        <div id="statusLabel">Converted Image</div>
+        <div class="image-container" id="resultContainer"></div>
+    </div>
+    <button onclick="downloadResultImages()" id="downloadResultImages" disabled>Download Converted Image</button>
+
+    <script>
+        function openFileSelector() {
+            fetch('/clear-image-cache')
+                .then(function (response) {
+                    return response.text();
+                })
+                .then(function (message) {
+                    console.log(message);
+
+                    var fileSelector = document.createElement('input');
+                    fileSelector.type = 'file';
+                    fileSelector.accept = getSourceFormatAccept();
+                    fileSelector.multiple = true;
+                    fileSelector.addEventListener('change', handleFileSelect, false);
+                    fileSelector.click();
+                })
+                .catch(function (error) {
+                    console.error('Clear image cache error:', error);
+                });
+        }
+
+        function handleFileSelect(event) {
+            var files = event.target.files;
+            var imageContainer = document.getElementById('imageContainer');
+            imageContainer.innerHTML = '';
+            for (var i = 0; i < files.length; i++) {
+                var file = files[i];
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.title = file.name;
+                imageContainer.appendChild(img);
+            }
+            uploadImages(files);
+        }
+
+        function uploadImages(files) {
+            var formData = new FormData();
+            var sourceFormat = document.getElementById('sourceFormat').value;
+            var targetFormat = document.getElementById('targetFormat').value;
+            for (var i = 0; i < files.length; i++) {
+                var file = files[i];
+                var encodedFileName = encodeURIComponent(file.name);
+                formData.append('images', file, encodedFileName);
+            }
+            formData.append('sourceFormat', sourceFormat);
+            formData.append('targetFormat', targetFormat);
+
+            var statusLabel = document.getElementById('statusLabel');
+            statusLabel.textContent = 'Converting image format';
+            var dots = 1;
+            var timer = setInterval(function () {
+                statusLabel.textContent = 'Converting image format' + '.'.repeat(dots);
+                dots = (dots + 1) % 4;
+            }, 500);
+
+            var randomParam = Date.now();
+            var url = '/image-format-converter?' + randomParam;
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (result) {
+                    console.log(result);
+                    displayProcessedImages(result.images);
+                    clearInterval(timer);
+                    statusLabel.textContent = 'Converted Image';
+                })
+                .catch(function (error) {
+                    clearInterval(timer);
+                    statusLabel.textContent = 'Converted Image';
+                    console.error('Image upload error:', error);
+                });
+        }
+
+        async function displayProcessedImages(images) {
+            var resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = '';
+
+            try {
+                var promises = images.map(function (imageUrl) {
+                    return new Promise(function (resolve, reject) {
+                        var img = document.createElement('img');
+                        img.onload = function () {
+                            img.classList.add('processed-image');
+                            resultContainer.appendChild(img);
+                            resolve();
+                        };
+                        img.onerror = function () {
+                            reject(new Error('Failed to load image: ' + imageUrl));
+                        };
+                        img.src = addRandomParam(imageUrl);
+                    });
+                });
+                await Promise.all(promises);
+
+                var downloadButton = document.getElementById("downloadResultImages");
+                downloadButton.disabled = false;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function addRandomParam(url) {
+            var randomParam = Date.now();
+            return url + '?' + randomParam;
+        }
+
+        function downloadResultImages() {
+            fetch('/download-result-images')
+                .then(function (response) {
+                    return response.blob();
+                })
+                .then(function (blob) {
+                    var timestamp = Date.now();
+                    var link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'Image_Conversion_' + timestamp + '.zip';
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                })
+                .catch(function (error) {
+                    console.error('Download images error:', error);
+                });
+        }
+
+        function updateTargetFormatOptions() {
+            var sourceFormat = document.getElementById('sourceFormat').value;
+            var targetFormatOptions = document.getElementById('targetFormat').options;
+            var targetFormat = document.getElementById("targetFormat");
+
+            if (sourceFormat === targetFormat.value) {
+                var options = targetFormat.getElementsByTagName("option");
+                for (var i = 0; i < options.length; i++) {
+                    if (!options[i].disabled && options[i].value !== sourceFormat) {
+                        targetFormat.value = options[i].value;
+                        break;
+                    }
+                }
+            }
+            for (var i = 0; i < targetFormatOptions.length; i++) {
+                var targetFormatValue = targetFormatOptions[i].value;
+
+                if (targetFormatValue === sourceFormat) {
+                    targetFormatOptions[i].disabled = true;
+                } else {
+                    targetFormatOptions[i].disabled = false;
+                }
+            }
+        }
+
+        function getSourceFormatAccept() {
+            var sourceFormat = document.getElementById('sourceFormat').value;
+
+            if (sourceFormat === 'png') {
+                return 'image/png';
+            } else if (sourceFormat === 'jpg') {
+                return 'image/jpeg';
+            } else if (sourceFormat === 'webp') {
+                return 'image/webp';
+            }
+
+            return 'image/*';
+        }
+    </script>
+</body>

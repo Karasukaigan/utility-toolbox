@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" type="text/css" href="css/reset.min.css">
+    <title>PDF to Image Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 auto 0 auto;
+        }
+
+        .toolbox-link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        label {
+            font-size: 16px;
+            margin-right: 5px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .image-container img {
+            max-height: 300px;
+            margin: 5px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .image-container img:hover {
+            transform: scale(2);
+        }
+
+        .img-box {
+            width: 90%;
+            min-width: 1000px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin: 20px auto;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            background-color: #fff;
+            color: gray;
+            font-weight: bolder;
+            font-size: 18px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>PDF to Image Converter</h1>
+        <a href="/" class="toolbox-link">
+            < Back to Toolbox</a>
+    </div>
+    <label for="pdfFile">Select PDF File:</label>
+    <button onclick="openFileSelector()">Select PDF File</button>
+    <label style="display: block; font-size: 10px; color: red; padding: 10px 0 0 15px;">*Converting large files may take several minutes, please be patient.</label>
+    <div class="img-box">
+        <div id="statusLabel">Converted Images</div>
+        <div class="image-container" id="resultContainer"></div>
+    </div>
+    <button onclick="downloadResultImages()" id="downloadResultImages" disabled>Download JPG Images</button>
+
+    <script>
+        function openFileSelector() {
+            fetch('/clear-pdf-cache')
+                .then(function (response) {
+                    return response.text();
+                })
+                .then(function (message) {
+                    console.log(message);
+                    var input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.pdf';
+                    input.addEventListener('change', function (event) {
+                        var files = event.target.files;
+                        convertToImages(files);
+                    });
+                    input.click();
+                })
+                .catch(function (error) {
+                    console.error('Clear image cache error:', error);
+                });
+        }
+
+        function convertToImages(files) {
+            var formData = new FormData();
+            for (var i = 0; i < files.length; i++) {
+                var file = files[i];
+                var encodedFileName = encodeURIComponent(file.name);
+                formData.append('pdfFile', file, encodedFileName);
+            }
+
+            var statusLabel = document.getElementById('statusLabel');
+            statusLabel.textContent = 'Extracting images';
+            var dots = 1;
+            var timer = setInterval(function () {
+                statusLabel.textContent = 'Extracting images' + '.'.repeat(dots);
+                dots = (dots + 1) % 4;
+            }, 500);
+
+            fetch('/pdf-to-images', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (result) {
+                    console.log(result);
+                    displayProcessedImages(result.images);
+                    clearInterval(timer);
+                    statusLabel.textContent = 'Converted Images';
+                })
+                .catch(function (error) {
+                    clearInterval(timer);
+                    statusLabel.textContent = 'Converted Images';
+                    console.error('PDF upload error:', error);
+                });
+        }
+
+        async function displayProcessedImages(images) {
+            var resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = '';
+
+            try {
+                var promises = images.map(function (imageUrl) {
+                    return new Promise(function (resolve, reject) {
+                        var img = document.createElement('img');
+                        img.onload = function () {
+                            img.classList.add('processed-image');
+                            resultContainer.appendChild(img);
+                            resolve();
+                        };
+                        img.onerror = function () {
+                            reject(new Error('Failed to load image: ' + imageUrl));
+                        };
+                        img.src = addRandomParam(imageUrl);
+                    });
+                });
+
+                await Promise.all(promises);
+                var downloadButton = document.getElementById("downloadResultImages");
+                downloadButton.disabled = false;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function addRandomParam(url) {
+            var randomParam = Date.now();
+            return url + '?' + randomParam;
+        }
+
+        function downloadResultImages() {
+            fetch('/download-result-images')
+                .then(function (response) {
+                    return response.blob();
+                })
+                .then(function (blob) {
+                    var timestamp = Date.now();
+                    var link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'PDF_to_JPG_' + timestamp + '.zip';
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                })
+                .catch(function (error) {
+                    console.error('Download images error:', error);
+                });
+        }
+    </script>
+</body>
+
+</html>

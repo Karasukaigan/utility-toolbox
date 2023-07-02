@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="css/reset.min.css">
+    <title>Utility Toolbox V1.0.0</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 auto 0 auto;
+        }
+
+        body div {
+            background-color: #fff;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            justify-items: center;
+            align-items: center;
+            width: 920px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        button {
+            padding: 20px;
+            margin: 2px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.1s ease;
+            width: 180px;
+            height: 180px;
+        }
+
+        button:hover {
+            transform: translateY(-10px);
+            border: 1px solid #006bdd;
+            box-shadow: 0 10px 10px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Utility Toolbox V1.0.0</h1>
+    <div>
+        <button onclick="window.location.href = '/image-format-conversion-tool';">Image Format Conversion</button>
+        <button onclick="window.location.href = '/pdf2image-tool';">PDF to Image</button>
+        <button onclick="window.location.href = '/image2pdf-tool';">Image to PDF</button>
+        <button onclick="window.location.href = '/remove-watermark-tool';">Remove Watermark<br>(Grayscale Range)</button>
+        <button onclick="window.location.href = '/remove-watermark-tool-rgb';">Remove Watermark<br>(RGB Value)</button>
+        <button onclick="window.location.href = '/add-watermark-tool-image';">Add Watermark<br>(Image)</button>
+        <button onclick="window.location.href = '/add-watermark-tool-text';">Add Watermark<br>(Text)</button>
+        <button id="clearCacheButton">Clear Cache</button>
+    </div>
+    <script>
+        document.getElementById('clearCacheButton').addEventListener('click', function () {
+            var clearCacheButton = this;
+            clearCacheButton.disabled = true;
+
+            Promise.all([
+                fetch('/clear-image-cache').then(function (response) {
+                    return response.text();
+                }),
+                fetch('/clear-pdf-cache').then(function (response) {
+                    return response.text();
+                })
+            ])
+                .then(function (results) {
+                    console.log(results[0]);
+                    console.log(results[1]);
+
+                    var countDown = 10; // Countdown seconds
+                    clearCacheButton.innerHTML = 'Cache Cleared<br>（' + countDown + 's）';
+                    clearCacheButton.style.backgroundColor = 'gray';
+
+                    var timer = setInterval(function () {
+                        countDown--;
+                        clearCacheButton.innerHTML = 'Cache Cleared<br>（' + countDown + 's）';
+
+                        if (countDown <= 0) {
+                            clearInterval(timer);
+                            clearCacheButton.textContent = 'Clear Cache';
+                            clearCacheButton.style.backgroundColor = '';
+                            clearCacheButton.disabled = false;
+                        }
+                    }, 1000);
+                })
+                .catch(function (error) {
+                    console.error('Clear cache error:', error);
+                    clearCacheButton.disabled = false;
+                });
+        });
+    </script>
+</body>
+
+</html>

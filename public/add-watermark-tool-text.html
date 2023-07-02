@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Image Watermarking Tool</title>
+    <link rel="stylesheet" type="text/css" href="css/reset.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 auto 0 auto;
+        }
+
+        .toolbox-link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        label {
+            font-size: 16px;
+            margin-right: 5px;
+        }
+
+        input[type="text"] {
+            width: 180px;
+            padding: 5px;
+            margin-right: 10px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            border: none;
+            border-radius: 3px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .image-container img {
+            max-height: 300px;
+            margin: 5px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .image-container img:hover {
+            transform: scale(2);
+        }
+
+        .img-box {
+            width: 90%;
+            min-width: 1000px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin: 20px auto;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            background-color: #fff;
+            color: gray;
+            font-weight: bolder;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>Image Watermarking Tool</h1>
+        <a href="/" class="toolbox-link">&lt; Back to Toolbox</a>
+    </div>
+    <div>
+        <label for="pngWatermark">Text Watermark:</label>
+        <input type="text" id="watermarkText" name="watermarkText" placeholder="Enter watermark text" value="Watermark Text">
+        <div id="watermarkLayoutContainer" style="display: inline-block;">
+            <input type="radio" id="center" name="watermarkLayout" value="center">
+            <label for="center">Horizontal</label>
+            <input type="radio" id="tilt" name="watermarkLayout" value="tilt" checked>
+            <label for="tilt">Slanted</label>
+        </div>
+    </div>
+    <div style="margin-top: 10px;">
+        <label for="jpgImages">Images to Add Watermark:</label>
+        <button onclick="openFileSelector('jpgImages')" id="jpgButton">Select JPG Images</button>
+    </div>
+    <div style="margin-top: 10px;">
+        <button onclick="addWatermark()" id="addWatermarkButton" disabled>Add Watermark</button>
+    </div>
+    <div class="img-box">
+        <div>Images to Add Watermark</div>
+        <div class="image-container" id="imageContainer"></div>
+    </div>
+    <div class="img-box">
+        <div>Images with Watermark</div>
+        <div class="image-container" id="resultContainer"></div>
+    </div>
+    <button onclick="downloadResultImages()" id="downloadResultImages" disabled>Download Watermarked Images</button>
+
+    <script>
+        var watermarkText;
+        var selectedImages;
+
+        function openFileSelector(type) {
+            if (type === 'jpgImages') {
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/jpeg';
+                input.multiple = true;
+                input.addEventListener('change', function (event) {
+                    selectedImages = event.target.files;
+                    displaySelectedImages();
+                    checkAndEnableAddWatermarkButton();
+                });
+                input.click();
+            }
+        }
+
+        function displaySelectedImages() {
+            var imageContainer = document.getElementById('imageContainer');
+            imageContainer.innerHTML = '';
+            for (var i = 0; i < selectedImages.length; i++) {
+                var file = selectedImages[i];
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.classList.add('uploaded-image');
+                imageContainer.appendChild(img);
+            }
+        }
+
+        function checkAndEnableAddWatermarkButton() {
+            var addWatermarkButton = document.getElementById('addWatermarkButton');
+            watermarkText = document.getElementById('watermarkText').value;
+            if (watermarkText && selectedImages) {
+                addWatermarkButton.disabled = false;
+            } else {
+                addWatermarkButton.disabled = true;
+            }
+        }
+
+        document.getElementById('watermarkText').addEventListener('input', checkAndEnableAddWatermarkButton);
+
+        function addWatermark() {
+            fetch('/clear-image-cache')
+                .then(function (response) {
+                    return response.text();
+                })
+                .then(function (message) {
+                    console.log(message);
+                    var formData = new FormData();
+                    for (var i = 0; i < selectedImages.length; i++) {
+                        var file = selectedImages[i];
+                        var encodedFileName = encodeURIComponent(file.name);
+                        formData.append('images', file, encodedFileName);
+                    }
+
+                    formData.append('watermark', watermarkText);
+                    formData.append('watermark-type', 'text');
+
+                    var selectedLayout = document.querySelector('input[name="watermarkLayout"]:checked');
+                    var watermarkLayout = selectedLayout.value;
+                    formData.append('watermark-layout', watermarkLayout);
+
+                    var randomParam = Date.now();
+                    var url = '/watermark-add?' + randomParam;
+                    fetch(url, {
+                        method: 'POST',
+                        body: formData,
+                    })
+                        .then(function (response) {
+                            return response.json();
+                        })
+                        .then(function (result) {
+                            console.log(result);
+                            displayProcessedImages(result.images);
+                        })
+                        .catch(function (error) {
+                            console.error('Image upload error:', error);
+                        });
+                })
+                .catch(function (error) {
+                    console.error('Clear image cache error:', error);
+                });
+        }
+
+        async function displayProcessedImages(images) {
+            var resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = '';
+
+            try {
+                var promises = images.map(function (imageUrl) {
+                    return new Promise(function (resolve, reject) {
+                        console.log(imageUrl);
+                        var img = document.createElement('img');
+                        img.onload = function () {
+                            img.classList.add('processed-image');
+                            resultContainer.appendChild(img);
+                            resolve();
+                        };
+                        img.onerror = function () {
+                            reject(new Error('Failed to load image: ' + imageUrl));
+                        };
+                        img.src = addRandomParam(imageUrl);
+                    });
+                });
+
+                await Promise.all(promises);
+                var downloadButton = document.getElementById("downloadResultImages");
+                downloadButton.disabled = false;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        function addRandomParam(url) {
+            var randomParam = Date.now();
+            return url + '?' + randomParam;
+        }
+
+        function downloadResultImages() {
+            fetch('/download-result-images')
+                .then(function (response) {
+                    return response.blob();
+                })
+                .then(function (blob) {
+                    var timestamp = Date.now();
+                    var link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'Watermarked_' + timestamp + '.zip';
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                })
+                .catch(function (error) {
+                    console.error('Download images error:', error);
+                });
+        }
+    </script>
+</body>
+
+</html>
